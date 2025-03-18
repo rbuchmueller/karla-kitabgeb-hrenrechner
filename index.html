@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Einkommen</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+      body {
+        font-family: 'Arial', sans-serif;
+        background-color: #f4f4f9;
+        color: #333;
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+      
+      .container {
+        width: 70%;
+        text-align: center;
+      }
+      
+      h4 {
+        color: #4a4a4a;
+      }
+      
+      .child-block {
+        border: 1px solid #ddd;
+        padding: 15px;
+        margin: 10px auto;
+        display: inline-block;
+        width: 220px;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      }
+      
+      .income-option {
+        display: inline-block;
+        margin-right: 10px;
+      }
+      
+      .result-block {
+        margin-top: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        display: inline-block;
+      }
+      
+      .form-calculation {
+        margin-top: 20px;
+        text-align: center;
+      }
+      
+      .form-calculation label {
+        font-weight: bold;
+      }
+      
+      .form-calculation input[type="radio"] {
+        margin-right: 5px;
+      }
+      
+      svg {
+        background-color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        margin-top: 20px;
+      }
+      
+      .bar {
+        stroke: #fff;
+      }
+      
+      .bar.selected {
+        stroke: none;
+        fill: #80F075; /* Highlight color */
+      }
+    </style>
+    <script>
+      const incomeBrackets = {
+        1: ["45.240 € oder weniger", "45.241 € - 67.860 €", "67.861 € - 108.750 €", "108.751 € oder mehr"],
+        2: ["50.245 € oder weniger", "50.246 € - 72.865 €", "72.866 € - 114.525 €", "114.526 € oder mehr"],
+        3: ["55.250 € oder weniger", "55.251 € - 77.870 €", "77.871 € - 120.300 €", "120.301 € oder mehr"],
+        4: ["60.255 € oder weniger", "60.256 € - 82.875 €", "82.876 € - 126.075 €", "126.076 € oder mehr"]
+      };
+
+      const costMatrix = {
+        "0-3": {
+          "Vormittags": [[129, 152, 175, 205], [97, 114, 131, 154]],
+          "Verlängerte Öffnungszeit": [[154, 181, 208, 244], [115, 136, 156, 183]],
+          "Ganztags": [[255, 300, 345, 405], [191, 225, 259, 304]]
+        },
+        "3-6": {
+          "Vormittags": [[66, 77, 89, 104], [49, 58, 67, 78]],
+          "Verlängerte Öffnungszeit": [[77, 91, 105, 123], [58, 68, 78, 92]],
+          "Ganztags": [[158, 186, 214, 251], [119, 140, 160, 188]]
+        },
+        "6+": {
+          "Nachmittagsbetreuung": [[158, 186, 214, 251], [119, 140, 160, 188]]
+        }
+      };
+
+      let totalCostsPerBracket = [0, 0, 0, 0];
+      let childCostsPerBracket = [];
+
+      function generateChildBlocks(numChildren) {
+        const container = document.getElementById('age-selectors');
+        container.innerHTML = '';
+
+        for (let i = 1; i <= numChildren; i++) {
+          const block = document.createElement('div');
+          block.className = 'child-block';
+
+          const title = document.createElement('h4');
+          title.textContent = `Kind ${i}`;
+          block.appendChild(title);
+
+          const ageLabel = document.createElement('label');
+          ageLabel.textContent = `Alter des Kindes ${i}: `;
+
+          const ageSelect = document.createElement('select');
+          ageSelect.name = `childAge${i}`;
+          const ageGroups = [
+            { value: '0-3', text: '0-3 Jahre' },
+            { value: '3-6', text: '3 Jahre bis Schuleintritt' },
+            { value: '6+', text: 'Schulkind' }
+          ];
+          ageGroups.forEach(group => {
+            const option = document.createElement('option');
+            option.value = group.value;
+            option.textContent = group.text;
+            ageSelect.appendChild(option);
+          });
+
+          const mealSelect = document.createElement('select');
+          mealSelect.name = `childAge${i}`;
+          const mealOptions = [
+              { value: 'Zu zahlen', text: 'Zu zahlen' },
+              { value: 'Nicht betroffen', text: 'Nicht betroffen' }
+          ];
+
+          mealOptions.forEach(option => {
+              const mealOption = document.createElement('option');
+              mealOption.value = option.value;
+              mealOption.textContent = option.text;
+              mealSelect.appendChild(mealOption);
+          });
+
+
+          ageSelect.addEventListener('change', () => updateCareOptions(i, ageSelect.value));
+
+          const careLabel = document.createElement('label');
+          careLabel.textContent = ' Betreuungsform: ';
+
+          const careSelect = document.createElement('select');
+          careSelect.name = `childCare${i}`;
+          
+          const mealLabel = document.createElement('label');
+          mealLabel.textContent = ' Essensgeld: ';
+          mealSelect.name = `childMeal${i}`;
+          mealSelect.addEventListener('change', calculateCosts);
+
+
+          block.appendChild(ageLabel);
+          block.appendChild(ageSelect);
+          block.appendChild(document.createElement('br'));
+          block.appendChild(careLabel);
+          block.appendChild(careSelect);
+          block.appendChild(mealLabel);
+          block.appendChild(mealSelect);
+
+          container.appendChild(block);
+
+          updateCareOptions(i, ageSelect.value);
+        }
+
+        updateIncomeOptions(numChildren);
+        calculateCosts();
+      }
+
+      function updateCareOptions(childIndex, ageGroup) {
+        const careSelect = document.querySelector(`select[name="childCare${childIndex}"]`);
+        careSelect.innerHTML = '';
+
+        let careOptions = [];
+        if (ageGroup === '0-3' || ageGroup === '3-6') {
+          careOptions = ['Vormittags', 'Verlängerte Öffnungszeit', 'Ganztags'];
+        } else if (ageGroup === '6+') {
+          careOptions = ['Nachmittagsbetreuung'];
+        }
+
+        careOptions.forEach(optionText => {
+          const option = document.createElement('option');
+          option.value = optionText;
+          option.textContent = optionText;
+          careSelect.appendChild(option);
+        });
+
+        careSelect.addEventListener('change', calculateCosts);
+        calculateCosts();
+      }
+
+      function updateIncomeOptions(numChildren) {
+        const container = document.getElementById('income-options');
+        container.innerHTML = '';
+
+        incomeBrackets[numChildren].forEach((bracket, index) => {
+          const wrapper = document.createElement('div');
+          wrapper.className = 'income-option';
+
+          const input = document.createElement('input');
+          input.type = 'radio';
+          input.id = `income${index}`;
+          input.name = 'bruttoIncome';
+          input.value = index;
+          if (index === 0) input.checked = true;
+
+          input.addEventListener('change', calculateCosts);
+
+          const label = document.createElement('label');
+          label.htmlFor = `income${index}`;
+          label.textContent = bracket;
+
+          wrapper.appendChild(input);
+          wrapper.appendChild(label);
+          container.appendChild(wrapper);
+        });
+      }
+
+      function calculateCosts() {
+        const numChildren = document.querySelectorAll('.child-block').length;
+        const incomeLevel = parseInt(document.querySelector('input[name="bruttoIncome"]:checked')?.value || 0);
+        let totalCost = 0;
+
+        totalCostsPerBracket = [0, 0, 0, 0];
+        childCostsPerBracket = Array.from({ length: 4 }, () => Array(numChildren).fill(0));
+
+        for (let bracket = 0; bracket < 4; bracket++) {
+          let bracketCost = 0;
+          for (let i = 1; i <= numChildren; i++) {
+            let childCost = 0;
+            const ageGroup = document.querySelector(`select[name="childAge${i}"]`).value;
+            const careType = document.querySelector(`select[name="childCare${i}"]`).value;
+            const mealSelection = document.querySelector(`select[name="childMeal${i}"]`).value;
+
+            if (i <= 2) {
+              childCost = (costMatrix[ageGroup][careType]?.[i - 1]?.[bracket]) || 0;
+            } else {
+              childCost = 100;
+            }
+
+            if (mealSelection === "Zu zahlen") {
+              childCost += 100;
+            }
+
+
+            bracketCost += childCost;
+            childCostsPerBracket[bracket][i - 1] = childCost;
+          }
+          totalCostsPerBracket[bracket] = bracketCost;
+        }
+
+        totalCost = totalCostsPerBracket[incomeLevel];
+
+        document.getElementById('calculation-result').innerHTML = `<strong>Gesamtkosten: ${totalCost} €</strong>`;
+
+        updateStackedBarChart(incomeLevel);
+      }
+
+      function updateStackedBarChart(selectedIndex) {
+        const svg = d3.select("svg");
+        svg.selectAll("g").remove();
+
+        const width = 600;
+        const height = 400;
+        const margin = { top: 20, right: 30, bottom: 40, left: 60 };
+
+        const highlightedColor = "#80F075";
+        const defaultColor = "#BF71FF";
+
+        const x = d3.scaleBand()
+          .domain(["Stufe 1", "Stufe 2", "Stufe 3", "Stufe 4"])
+          .range([margin.left, width - margin.right])
+          .padding(0.1);
+
+        const y = d3.scaleLinear()
+          .domain([0, d3.max(totalCostsPerBracket)])
+          .nice()
+          .range([height - margin.bottom, margin.top]);
+
+        svg.append("g")
+          .attr("transform", `translate(0,${height - margin.bottom})`)
+          .call(d3.axisBottom(x));
+
+        svg.append("g")
+          .attr("transform", `translate(${margin.left},0)`)
+          .call(d3.axisLeft(y).ticks(null, "s"));
+
+        const bracket = svg.selectAll(".bracket")
+          .data(childCostsPerBracket)
+          .enter().append("g")
+          .attr("class", "bracket")
+          .attr("transform", (d, i) => `translate(${x(`Stufe ${i + 1}`)},0)`);
+
+        bracket.selectAll("rect")
+          .data(d => d)
+          .enter().append("rect")
+          .attr("x", 0)
+          .attr("y", (d, i, nodes) => y(d3.sum(d3.selectAll(nodes).data().slice(0, i + 1))))
+          .attr("height", d => y(0) - y(d))
+          .attr("width", x.bandwidth())
+          .attr("fill", (d, i, nodes) => nodes[i].parentNode.__data__ === childCostsPerBracket[selectedIndex] ? highlightedColor : defaultColor)
+          .attr("class", (d, i, nodes) => nodes[i].parentNode.__data__ === childCostsPerBracket[selectedIndex] ? "bar selected" : "bar");
+      }
+
+      document.addEventListener('DOMContentLoaded', function() {
+        const childrenRadios = document.getElementsByName('numberChildrenInSameKita');
+        childrenRadios.forEach(radio => {
+          radio.addEventListener('change', function() {
+            const numChildren = parseInt(this.value);
+            generateChildBlocks(numChildren);
+          });
+        });
+
+        generateChildBlocks(1);
+      });
+    </script>
+  </head>
+  <body>
+    <form method="post" class="form-calculation">
+      <div class="form-calculation">
+        <label>Anzahl Kinder in Kindertagestätten: </label>
+        <label for="children1">1</label>
+        <input type="radio" id="children1" name="numberChildrenInSameKita" value="1" checked />
+        <label for="children2">2</label>
+        <input type="radio" id="children2" name="numberChildrenInSameKita" value="2" />
+        <label for="children3">3</label>
+        <input type="radio" id="children3" name="numberChildrenInSameKita" value="3" />
+        <label for="children4">4</label>
+        <input type="radio" id="children4" name="numberChildrenInSameKita" value="4" />
+      </div>
+      <label>Gehaltsspanne: </label>
+      <div class="form-calculation" id="income-options">
+        <!-- Income options will be populated dynamically -->
+      </div>
+      <div id="age-selectors"></div>
+    </form>
+    <div class="result-block" id="calculation-result">
+      <!-- Calculation results will be displayed here -->
+    </div>
+    <svg width="600" height="500"></svg>
+  </body>
+</html>
